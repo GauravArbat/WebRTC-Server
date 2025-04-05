@@ -1,21 +1,28 @@
 const { Server } = require("socket.io");
+const http = require("http");
+const express = require("express");
+const cors = require("cors");
 
-const io = new Server(8000, {
-  cors: true,
+const app = express();
+app.use(cors()); // Enable CORS for all origins
+
+const server = http.createServer(app); // Create an HTTP server
+const io = new Server(server, {
+  cors: {
+    origin: "*", // Allow all origins
+    methods: ["GET", "POST"],
+  },
 });
 
-const emailToSocketIdMap = new Map();
-const socketidToEmailMap = new Map();
+const PORT = process.env.PORT || 8000;
 
 io.on("connection", (socket) => {
-  console.log(`Socket Connected`, socket.id);
+  console.log(`Socket connected: ${socket.id}`);
+
   socket.on("room:join", (data) => {
     const { email, room } = data;
-    emailToSocketIdMap.set(email, socket.id);
-    socketidToEmailMap.set(socket.id, email);
-    io.to(room).emit("user:joined", { email, id: socket.id });
     socket.join(room);
-    io.to(socket.id).emit("room:join", data);
+    io.to(room).emit("user:joined", { email, id: socket.id });
   });
 
   socket.on("user:call", ({ to, offer }) => {
@@ -26,13 +33,11 @@ io.on("connection", (socket) => {
     io.to(to).emit("call:accepted", { from: socket.id, ans });
   });
 
-  socket.on("peer:nego:needed", ({ to, offer }) => {
-    console.log("peer:nego:needed", offer);
-    io.to(to).emit("peer:nego:needed", { from: socket.id, offer });
+  socket.on("disconnect", () => {
+    console.log(`Socket disconnected: ${socket.id}`);
   });
+});
 
-  socket.on("peer:nego:done", ({ to, ans }) => {
-    console.log("peer:nego:done", ans);
-    io.to(to).emit("peer:nego:final", { from: socket.id, ans });
-  });
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
